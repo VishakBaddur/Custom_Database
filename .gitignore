@@ -1,0 +1,21 @@
+# Build artifacts
+build/
+out/
+dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Data files
+data/
+logs/
