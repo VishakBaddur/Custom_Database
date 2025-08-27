@@ -18,9 +18,14 @@ find_package(Boost REQUIRED)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${Boost_INCLUDE_DIRS})
 
+# Storage library
+add_library(storage_lib
+    src/storage/wal.cpp
+)
+
 # Database library
 add_library(database_lib
-    src/core/database.cpp
+    src/core/persistent_database.cpp
 )
 
 # Network library
@@ -30,7 +35,7 @@ add_library(network_lib
     src/network/client.cpp
 )
 
-target_link_libraries(network_lib database_lib ${Boost_LIBRARIES})
+target_link_libraries(network_lib database_lib storage_lib ${Boost_LIBRARIES})
 
 # Server executable
 add_executable(distributeddb_server src/server_main.cpp)
@@ -46,4 +51,4 @@ target_link_libraries(distributeddb_benchmark network_lib)
 
 # Simple database executable (for testing)
 add_executable(distributeddb src/main.cpp)
-target_link_libraries(distributeddb database_lib)
+target_link_libraries(distributeddb database_lib storage_lib)
