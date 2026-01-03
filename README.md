@@ -1,6 +1,8 @@
-# 🚀 DistributedDB - High-Performance Distributed Database System
+# 🚀 DistributedDB - High-Performance Database System
 
-A production-ready distributed key-value database system built from scratch in C++ with **10M+ operations/second** performance.
+A production-ready high-performance key-value database system built from scratch in C++ with **10M+ operations/second** performance.
+
+> **📌 Current Status:** This is currently a **single-node database** with high-performance async I/O architecture. Distributed features (multi-node clusters, consensus, replication) are planned for Phase 3 but not yet implemented. The name "DistributedDB" reflects the future roadmap.
 
 [![C++](https://img.shields.io/badge/C++-17-blue.svg)](https://isocpp.org/)
 [![CMake](https://img.shields.io/badge/CMake-3.15+-green.svg)](https://cmake.org/)
@@ -18,6 +20,7 @@ A production-ready distributed key-value database system built from scratch in C
 
 ## 🏗️ **Architecture Overview**
 
+**Current Architecture (Single-Node):**
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Client App    │    │   Client App    │    │   Client App    │
@@ -28,13 +31,17 @@ A production-ready distributed key-value database system built from scratch in C
                     ┌─────────────┴─────────────┐
                     │   Multi-Threaded Server   │
                     │   (8 Worker Threads)      │
+                    │   Async I/O Architecture  │
                     └─────────────┬─────────────┘
                                   │
                         ┌─────────▼─────────┐
                         │  Database Engine  │
                         │  (10M+ ops/sec)   │
+                        │  WAL + ACID       │
                         └───────────────────┘
 ```
+
+**Note:** Multi-node distributed architecture with consensus and replication is planned for Phase 3.
 
 ## 🚀 **Quick Start**
 
@@ -134,7 +141,7 @@ This project demonstrates advanced skills in:
 - Key-value store implementation
 - ACID transaction support
 - Query optimization and indexing
-- Distributed systems design
+- High-performance single-node architecture (distributed design planned)
 
 ### **Software Architecture**
 - Clean, modular design
@@ -150,11 +157,13 @@ This project demonstrates advanced skills in:
 - [x] Crash recovery mechanisms
 - [ ] B-tree indexing (header defined, implementation pending)
 
-### **Phase 3: Distributed Consensus** 📋
+### **Phase 3: Distributed Consensus** 📋 (Not Yet Implemented)
 - [ ] Raft algorithm implementation
 - [ ] Leader election and log replication
 - [ ] Multi-node cluster support
 - [ ] Fault tolerance and failover
+
+> **Note:** Once Phase 3 is complete, the database will be truly "distributed" with multi-node cluster support. Currently, it's a high-performance single-node database.
 
 ### **Phase 4: Advanced Features** 📋
 - [ ] Sharding and partitioning
