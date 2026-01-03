@@ -1,13 +1,15 @@
 #include "network/client.h"
 #include <iostream>
 #include <string>
+#include <chrono>
 
 void print_usage() {
     std::cout << "Usage: distributeddb_client <host> <port> <command> [args...]" << std::endl;
     std::cout << "Commands:" << std::endl;
     std::cout << "  get <key>                    - Get value for key" << std::endl;
-    std::cout << "  put <key> <value>            - Put key-value pair" << std::endl;
+    std::cout << "  put <key> <value>          - Put key-value pair" << std::endl;
     std::cout << "  del <key>                    - Delete key" << std::endl;
+    std::cout << "  scan <start_key> <end_key>   - Scan keys in range" << std::endl;
     std::cout << "  ping                         - Ping server" << std::endl;
     std::cout << "  benchmark <num_operations>   - Run performance benchmark" << std::endl;
 }
@@ -86,6 +88,20 @@ int main(int argc, char* argv[]) {
             std::string key = argv[4];
             bool success = client.del(key);
             std::cout << (success ? "OK" : "ERROR") << std::endl;
+            
+        } else if (command == "scan" && argc >= 6) {
+            std::string start_key = argv[4];
+            std::string end_key = argv[5];
+            try {
+                auto results = client.scan(start_key, end_key, 1000);
+                std::cout << "Found " << results.size() << " results:" << std::endl;
+                for (const auto& [key, value] : results) {
+                    std::cout << "  " << key << " = " << value << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "SCAN error: " << e.what() << std::endl;
+                return 1;
+            }
             
         } else if (command == "ping") {
             bool success = client.ping();

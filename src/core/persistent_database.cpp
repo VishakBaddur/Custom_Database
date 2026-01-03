@@ -13,7 +13,7 @@ public:
                          std::shared_mutex& mutex,
                          std::shared_ptr<WriteAheadLog> wal,
                          uint64_t id)
-        : data_(data), mutex_(mutex), wal_(wal), id_(id) {}
+        : data_(data), mutex_(mutex), wal_(wal), id_(id), has_writes_(false) {}
     
     std::string get(const std::string& key) override {
         std::shared_lock<std::shared_mutex> lock(mutex_);
@@ -24,7 +24,11 @@ public:
     OperationResult put(const std::string& key, const std::string& value) override {
         std::unique_lock<std::shared_mutex> lock(mutex_);
         
-        // Log the operation to WAL
+        // Update data first for better performance
+        data_[key] = value;
+        has_writes_ = true;
+        
+        // Log the operation to WAL (async batching could be added here)
         WALRecord record;
         record.type = WALRecordType::PUT;
         record.key = key;
@@ -34,11 +38,12 @@ public:
         record.transaction_id = id_;
         
         if (!wal_->append_record(record)) {
+            // Rollback on WAL failure
+            data_.erase(key);
+            has_writes_ = false;
             return OperationResult::SYSTEM_ERROR;
         }
         
-        // Update data
-        data_[key] = value;
         return OperationResult::SUCCESS;
     }
     
@@ -50,6 +55,13 @@ public:
             return OperationResult::KEY_NOT_FOUND;
         }
         
+        // Store value for potential rollback
+        std::string old_value = it->second;
+        
+        // Remove from data first
+        data_.erase(it);
+        has_writes_ = true;
+        
         // Log the operation to WAL
         WALRecord record;
         record.type = WALRecordType::DELETE;
@@ -58,11 +70,12 @@ public:
         record.transaction_id = id_;
         
         if (!wal_->append_record(record)) {
+            // Rollback on WAL failure
+            data_[key] = old_value;
+            has_writes_ = false;
             return OperationResult::SYSTEM_ERROR;
         }
         
-        // Remove from data
-        data_.erase(it);
         return OperationResult::SUCCESS;
     }
     
@@ -83,13 +96,16 @@ public:
     }
     
     OperationResult commit() override {
-        // Log commit record
-        WALRecord record;
-        record.type = WALRecordType::COMMIT;
-        record.transaction_id = id_;
-        
-        if (!wal_->append_record(record)) {
-            return OperationResult::SYSTEM_ERROR;
+        // Log commit record (only if we had write operations)
+        // For read-only transactions, skip WAL commit
+        if (has_writes_) {
+            WALRecord record;
+            record.type = WALRecordType::COMMIT;
+            record.transaction_id = id_;
+            
+            if (!wal_->append_record(record)) {
+                return OperationResult::SYSTEM_ERROR;
+            }
         }
         
         return OperationResult::SUCCESS;
@@ -108,6 +124,7 @@ private:
     std::shared_mutex& mutex_;
     std::shared_ptr<WriteAheadLog> wal_;
     uint64_t id_;
+    bool has_writes_;
 };
 
 class PersistentDatabase : public Database {

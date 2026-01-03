@@ -4,14 +4,20 @@
 #include <iostream>
 #include <signal.h>
 #include <memory>
+#include <thread>
+#include <vector>
 
 std::unique_ptr<distributeddb::DatabaseServer> server;
 std::unique_ptr<boost::asio::io_context> io_context;
+std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard;
 
 void signal_handler(int signal) {
     std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
     if (server) {
         server->stop();
+    }
+    if (work_guard) {
+        work_guard->reset();
     }
     if (io_context) {
         io_context->stop();
@@ -34,8 +40,10 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
     
     try {
-        // Create IO context
+        // Create IO context with work guard to keep it running
         io_context = std::make_unique<boost::asio::io_context>();
+        work_guard = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(
+            boost::asio::make_work_guard(*io_context));
         
         // Create database
         auto database = distributeddb::DatabaseFactory::create_database();
@@ -59,10 +67,29 @@ int main(int argc, char* argv[]) {
         server->start();
         
         std::cout << "✅ Server started successfully" << std::endl;
+        std::cout << "   Port: " << port << std::endl;
+        std::cout << "   Max connections: 50,000" << std::endl;
+        std::cout << "   Worker threads: 8" << std::endl;
         std::cout << "Press Ctrl+C to stop the server" << std::endl;
         
-        // Run the IO context
-        io_context->run();
+        // Run IO context in multiple threads for better scalability
+        std::vector<std::thread> io_threads;
+        size_t num_io_threads = std::thread::hardware_concurrency();
+        if (num_io_threads == 0) num_io_threads = 4;
+        
+        boost::asio::io_context* io_ctx_ptr = io_context.get();
+        for (size_t i = 0; i < num_io_threads; ++i) {
+            io_threads.emplace_back([io_ctx_ptr]() {
+                if (io_ctx_ptr) {
+                    io_ctx_ptr->run();
+                }
+            });
+        }
+        
+        // Wait for all threads
+        for (auto& thread : io_threads) {
+            thread.join();
+        }
         
     } catch (const std::exception& e) {
         std::cerr << "Server error: " << e.what() << std::endl;

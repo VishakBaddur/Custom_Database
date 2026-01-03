@@ -85,8 +85,45 @@ bool DatabaseClient::del(const std::string& key) {
 std::vector<std::pair<std::string, std::string>> DatabaseClient::scan(const std::string& start_key,
                                                                      const std::string& end_key,
                                                                      size_t limit) {
-    // For now, return empty result (scan not implemented in server yet)
-    return {};
+    Message request;
+    request.type = MessageType::SCAN;
+    request.id = ++request_id_;
+    request.key = start_key;
+    request.value = end_key;
+    request.key_length = static_cast<uint32_t>(start_key.length());
+    request.value_length = static_cast<uint32_t>(end_key.length());
+    
+    Message response = send_request(request);
+    if (response.type == MessageType::SUCCESS) {
+        // Parse JSON-like response
+        std::vector<std::pair<std::string, std::string>> results;
+        std::string json = response.value;
+        
+        // Simple JSON parsing for scan results
+        size_t pos = 0;
+        while ((pos = json.find("{\"key\":\"", pos)) != std::string::npos) {
+            pos += 8; // Skip "{\"key\":\""
+            size_t key_end = json.find("\"", pos);
+            if (key_end == std::string::npos) break;
+            std::string key = json.substr(pos, key_end - pos);
+            
+            pos = json.find("\"value\":\"", key_end);
+            if (pos == std::string::npos) break;
+            pos += 9; // Skip "\"value\":\""
+            size_t value_end = json.find("\"", pos);
+            if (value_end == std::string::npos) break;
+            std::string value = json.substr(pos, value_end - pos);
+            
+            results.emplace_back(key, value);
+            pos = value_end;
+            
+            if (results.size() >= limit) break;
+        }
+        
+        return results;
+    } else {
+        throw std::runtime_error("SCAN failed: " + response.value);
+    }
 }
 
 bool DatabaseClient::ping() {

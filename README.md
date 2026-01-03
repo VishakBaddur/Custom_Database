@@ -69,28 +69,29 @@ make -j$(nproc)
 ## 🔧 **Core Features**
 
 ### ✅ **High-Performance Database Engine**
-- **Lock-free data structures** for maximum concurrency
-- **Custom memory pools** for efficient allocation
+- **Thread-safe hash tables** with shared_mutex for concurrent reads
 - **Optimized hash tables** for O(1) key-value operations
-- **Thread-safe transactions** with ACID properties
+- **ACID transactions** with commit/rollback support
+- **Write-Ahead Logging (WAL)** for data durability and crash recovery
 
 ### ✅ **Multi-Threaded TCP Server**
-- **8 worker threads** handling concurrent connections
+- **Async I/O architecture** using Boost.Asio for high scalability
+- **8 worker threads** for request processing
+- **50,000+ concurrent connections** support
 - **Custom binary protocol** for efficient communication
-- **Connection pooling** and load balancing
 - **Graceful shutdown** with signal handling
 
 ### ✅ **Advanced Networking**
-- **Boost.Asio** for high-performance networking
+- **Boost.Asio** for high-performance async networking
 - **Custom message serialization** for protocol efficiency
-- **Error handling** and automatic reconnection
-- **Command-line client** with full CRUD operations
+- **Connection management** with automatic cleanup
+- **Command-line client** with full CRUD operations including SCAN
 
 ### ✅ **Performance Optimization**
-- **Zero-copy operations** where possible
-- **Memory-mapped I/O** for persistence (planned)
-- **Compression algorithms** for network efficiency
-- **Connection multiplexing** for high throughput
+- **Async I/O** for non-blocking operations
+- **Optimized transaction handling** with reduced latency
+- **Efficient WAL batching** for durability
+- **Multi-threaded IO context** for maximum throughput
 
 ## 📊 **Performance Benchmarks**
 
@@ -143,11 +144,11 @@ This project demonstrates advanced skills in:
 
 ## 🔮 **Roadmap**
 
-### **Phase 2: Persistence & Transactions** 🚧
-- [ ] Write-Ahead Logging (WAL)
-- [ ] ACID transaction support
-- [ ] Crash recovery mechanisms
-- [ ] B-tree indexing
+### **Phase 2: Persistence & Transactions** ✅
+- [x] Write-Ahead Logging (WAL)
+- [x] ACID transaction support
+- [x] Crash recovery mechanisms
+- [ ] B-tree indexing (header defined, implementation pending)
 
 ### **Phase 3: Distributed Consensus** 📋
 - [ ] Raft algorithm implementation
