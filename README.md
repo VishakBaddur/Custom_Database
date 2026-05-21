@@ -179,9 +179,6 @@ This project demonstrates advanced skills in:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 **License**
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 **Acknowledgments**
 
@@ -195,8 +192,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **🔗 Connect with me:**
 - GitHub: [@VishakBaddur](https://github.com/VishakBaddur)
-- LinkedIn: [Your LinkedIn]
-- Portfolio: [Your Portfolio]
+
 
 ---
 
