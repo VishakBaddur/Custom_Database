@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  node0:
+    build: .
+    container_name: distributeddb_node0
+    command: >
+      ./build/distributeddb_raft_server
+      0 8080 9000
+      1:node1:9001
+      2:node2:9002
+    ports:
+      - "8080:8080"
+      - "9000:9000"
+    volumes:
+      - node0_data:/app/data/node0
+    networks:
+      - raft_net
+    restart: on-failure
+
+  node1:
+    build: .
+    container_name: distributeddb_node1
+    command: >
+      ./build/distributeddb_raft_server
+      1 8081 9001
+      0:node0:9000
+      2:node2:9002
+    ports:
+      - "8081:8081"
+      - "9001:9001"
+    volumes:
+      - node1_data:/app/data/node1
+    networks:
+      - raft_net
+    restart: on-failure
+
+  node2:
+    build: .
+    container_name: distributeddb_node2
+    command: >
+      ./build/distributeddb_raft_server
+      2 8082 9002
+      0:node0:9000
+      1:node1:9001
+    ports:
+      - "8082:8082"
+      - "9002:9002"
+    volumes:
+      - node2_data:/app/data/node2
+    networks:
+      - raft_net
+    restart: on-failure
+
+volumes:
+  node0_data:
+  node1_data:
+  node2_data:
+
+networks:
+  raft_net:
+    driver: bridge
