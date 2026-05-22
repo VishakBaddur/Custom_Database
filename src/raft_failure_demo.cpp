@@ -110,20 +110,22 @@ int main() {
     std::this_thread::sleep_for(std::chrono::milliseconds(400));
     std::cout << "\n  Committed so far: " << committed_count << "\n";
 
+    int prev_leader_count = leader_count.load();
     // ── Phase 2: Kill the leader ──────────────────────────────────────────────
     std::cout << "\n━━━ Phase 3: KILLING LEADER (Node " << lid << ") ━━━\n\n";
     std::cout << "  Simulating leader crash...\n";
     nodes[lid]->stop();
     servers[lid]->stop();
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
     nodes[lid].reset();   // null it out to show it's dead
     servers[lid].reset();
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     print_cluster_state(nodes);
 
     // ── Phase 3: Wait for re-election ─────────────────────────────────────────
     std::cout << "━━━ Phase 4: Waiting for new leader election ━━━\n\n";
-    int prev_leader_count = leader_count.load();
     auto t_start = std::chrono::steady_clock::now();
 
     for (int i = 0; i < 30; ++i) {
