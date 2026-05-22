@@ -42,6 +42,7 @@ void RaftNode::stop() {
     if (!running_.exchange(false)) return;
     timer_cv_.notify_all();
     if (timer_thread_.joinable()) timer_thread_.join();
+    if (heartbeat_thread_.joinable()) heartbeat_thread_.join();
     for (auto& p : peers_) p->stop();
     std::cout << "[Raft] Node " << node_id_ << " stopped\n";
 }

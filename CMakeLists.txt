@@ -66,3 +66,7 @@ target_link_libraries(raft_lib ${Boost_LIBRARIES})
 # Raft cluster test
 add_executable(raft_cluster_test src/raft_cluster_test.cpp)
 target_link_libraries(raft_cluster_test raft_lib -pthread)
+
+# Raft failure demo
+add_executable(raft_failure_demo src/raft_failure_demo.cpp)
+target_link_libraries(raft_failure_demo raft_lib -pthread)
