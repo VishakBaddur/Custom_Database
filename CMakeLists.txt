@@ -52,3 +52,17 @@ target_link_libraries(distributeddb_benchmark network_lib)
 # Simple database executable (for testing)
 add_executable(distributeddb src/main.cpp)
 target_link_libraries(distributeddb database_lib storage_lib)
+
+# Raft library
+add_library(raft_lib
+    src/raft/raft_rpc.cpp
+    src/raft/raft_log.cpp
+    src/raft/raft_node.cpp
+    src/raft/raft_peer.cpp
+    src/raft/raft_server.cpp
+)
+target_link_libraries(raft_lib ${Boost_LIBRARIES})
+
+# Raft cluster test
+add_executable(raft_cluster_test src/raft_cluster_test.cpp)
+target_link_libraries(raft_cluster_test raft_lib -pthread)
