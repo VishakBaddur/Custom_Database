@@ -3,6 +3,7 @@
 #include <iostream>
 #include <boost/asio/write.hpp>
 #include <boost/asio/read.hpp>
+#include <boost/asio/post.hpp>
 #include <algorithm>
 
 namespace distributeddb {
@@ -10,9 +11,10 @@ namespace distributeddb {
 // ConnectionHandler implementation
 ConnectionHandler::ConnectionHandler(boost::asio::ip::tcp::socket socket,
                                      std::shared_ptr<Database> database,
+                                     DatabaseServer* server,
                                      std::function<void()> on_disconnect)
-    : socket_(std::move(socket)), database_(database), 
-      on_disconnect_(on_disconnect), active_(true) {
+    : socket_(std::move(socket)), database_(database), server_(server),
+      on_disconnect_(on_disconnect), write_length_(0), active_(true) {
 }
 
 void ConnectionHandler::start() {
@@ -79,138 +81,38 @@ void ConnectionHandler::read_body(uint32_t message_length) {
 }
 
 void ConnectionHandler::handle_request(const Message& request) {
-    if (!database_) {
+    if (!server_) {
         Message error_response;
         error_response.id = request.id;
         error_response.type = MessageType::ERROR;
-        error_response.value = "Database not initialized";
+        error_response.value = "Server context not available";
         error_response.key_length = 0;
         error_response.value_length = static_cast<uint32_t>(error_response.value.length());
         write_response(error_response);
         return;
     }
     
-    // Process request synchronously for now (can be optimized with thread pool)
-    Message response = process_request_sync(request);
-    write_response(response);
-}
-
-Message ConnectionHandler::process_request_sync(const Message& request) {
-    Message response;
-    response.id = request.id;
+    auto self = shared_from_this();
     
-    try {
-        switch (request.type) {
-            case MessageType::GET: {
-                auto txn = database_->begin_transaction();
-                if (txn) {
-                    std::string value = txn->get(request.key);
-                    if (!value.empty()) {
-                        response.type = MessageType::SUCCESS;
-                        response.value = value;
-                    } else {
-                        response.type = MessageType::ERROR;
-                        response.value = "Key not found";
-                    }
-                } else {
-                    response.type = MessageType::ERROR;
-                    response.value = "Failed to begin transaction";
-                }
-                break;
-            }
-            
-            case MessageType::PUT: {
-                auto txn = database_->begin_transaction();
-                if (txn) {
-                    auto result = txn->put(request.key, request.value);
-                    if (result == OperationResult::SUCCESS) {
-                        txn->commit();
-                        response.type = MessageType::SUCCESS;
-                        response.value = "OK";
-                    } else {
-                        response.type = MessageType::ERROR;
-                        response.value = "Failed to put value";
-                    }
-                } else {
-                    response.type = MessageType::ERROR;
-                    response.value = "Failed to begin transaction";
-                }
-                break;
-            }
-            
-            case MessageType::DELETE: {
-                auto txn = database_->begin_transaction();
-                if (txn) {
-                    auto result = txn->del(request.key);
-                    if (result == OperationResult::SUCCESS) {
-                        txn->commit();
-                        response.type = MessageType::SUCCESS;
-                        response.value = "OK";
-                    } else {
-                        response.type = MessageType::ERROR;
-                        response.value = "Failed to delete key";
-                    }
-                } else {
-                    response.type = MessageType::ERROR;
-                    response.value = "Failed to begin transaction";
-                }
-                break;
-            }
-            
-            case MessageType::SCAN: {
-                auto txn = database_->begin_transaction();
-                if (txn) {
-                    auto results = txn->scan(request.key, request.value, 1000);
-                    response.type = MessageType::SUCCESS;
-                    // Serialize scan results as JSON-like format
-                    std::string result_str = "[";
-                    for (size_t i = 0; i < results.size(); ++i) {
-                        result_str += "{\"key\":\"" + results[i].first + 
-                                     "\",\"value\":\"" + results[i].second + "\"}";
-                        if (i < results.size() - 1) result_str += ",";
-                    }
-                    result_str += "]";
-                    response.value = result_str;
-                } else {
-                    response.type = MessageType::ERROR;
-                    response.value = "Failed to begin transaction";
-                }
-                break;
-            }
-            
-            case MessageType::PING: {
-                response.type = MessageType::PONG;
-                response.value = "PONG";
-                break;
-            }
-            
-            default: {
-                response.type = MessageType::ERROR;
-                response.value = "Unsupported operation";
-                break;
-            }
-        }
-    } catch (const std::exception& e) {
-        response.type = MessageType::ERROR;
-        response.value = std::string("Server error: ") + e.what();
-    }
-    
-    response.key_length = static_cast<uint32_t>(response.key.length());
-    response.value_length = static_cast<uint32_t>(response.value.length());
-    
-    return response;
+    // Offload processing to the thread pool worker threads
+    server_->process_request_async(request, [this, self](Message response) {
+        // Safely marshal the response write back onto the I/O event loop strand/context
+        boost::asio::post(socket_.get_executor(), [this, self, response]() {
+            write_response(response);
+        });
+    });
 }
 
 void ConnectionHandler::write_response(const Message& response) {
     if (!active_) return;
     
-    std::vector<uint8_t> response_data = response.serialize();
-    uint32_t response_length = static_cast<uint32_t>(response_data.size());
+    // Fix: Save serialization data into instance variables so it outlives the async execution frame
+    write_buffer_ = response.serialize();
+    write_length_ = static_cast<uint32_t>(write_buffer_.size());
     
-    // Create buffers for async write
     std::vector<boost::asio::const_buffer> buffers;
-    buffers.push_back(boost::asio::buffer(&response_length, sizeof(response_length)));
-    buffers.push_back(boost::asio::buffer(response_data));
+    buffers.push_back(boost::asio::buffer(&write_length_, sizeof(write_length_)));
+    buffers.push_back(boost::asio::buffer(write_buffer_));
     
     auto self = shared_from_this();
     boost::asio::async_write(
@@ -218,7 +120,7 @@ void ConnectionHandler::write_response(const Message& response) {
         buffers,
         [this, self](boost::system::error_code ec, std::size_t) {
             if (!ec && active_) {
-                // Continue reading next request
+                // Continue reading next request on the connection stream
                 read_header();
             } else {
                 if (ec != boost::asio::error::operation_aborted) {
@@ -288,9 +190,11 @@ void DatabaseServer::handle_accept(std::shared_ptr<boost::asio::ip::tcp::socket>
         } else {
             connection_count_++;
             
+            // Pass 'this' into the constructor so the handler knows about the thread pool server
             auto handler = std::make_shared<ConnectionHandler>(
                 std::move(*socket),
                 database_,
+                this,
                 [this]() { on_client_disconnect(); }
             );
             handler->start();
@@ -329,7 +233,7 @@ void DatabaseServer::worker_thread_function() {
 }
 
 void DatabaseServer::process_request_async(const Message& request,
-                                         std::function<void(Message)> callback) {
+                                           std::function<void(Message)> callback) {
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         request_queue_.push({request, callback});
@@ -413,7 +317,6 @@ Message DatabaseServer::process_request(const Message& request) {
                 if (txn) {
                     auto results = txn->scan(request.key, request.value, 1000);
                     response.type = MessageType::SUCCESS;
-                    // Serialize scan results
                     std::string result_str = "[";
                     for (size_t i = 0; i < results.size(); ++i) {
                         result_str += "{\"key\":\"" + results[i].first + 

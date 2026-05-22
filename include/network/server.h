@@ -14,13 +14,15 @@
 namespace distributeddb {
 
 class Database; // Forward declaration
+class DatabaseServer; // Forward declaration
 
 // Connection handler class for async operations
 class ConnectionHandler : public std::enable_shared_from_this<ConnectionHandler> {
 public:
     ConnectionHandler(boost::asio::ip::tcp::socket socket, 
-                     std::shared_ptr<Database> database,
-                     std::function<void()> on_disconnect);
+                      std::shared_ptr<Database> database,
+                      DatabaseServer* server,
+                      std::function<void()> on_disconnect);
     
     void start();
     void stop();
@@ -34,9 +36,15 @@ private:
     
     boost::asio::ip::tcp::socket socket_;
     std::shared_ptr<Database> database_;
+    DatabaseServer* server_;
     std::function<void()> on_disconnect_;
     std::array<uint8_t, 4> header_buffer_;
     std::vector<uint8_t> body_buffer_;
+    
+    // Fix for async write lifetime issue
+    uint32_t write_length_;
+    std::vector<uint8_t> write_buffer_;
+    
     bool active_;
 };
 
@@ -55,6 +63,10 @@ public:
     uint32_t get_connection_count() const { return connection_count_.load(); }
     uint64_t get_total_requests() const { return total_requests_.load(); }
 
+    // Exposed for ConnectionHandler to offload work to thread pool
+    void process_request_async(const Message& request, 
+                              std::function<void(Message)> callback);
+
 private:
     void start_accept();
     void handle_accept(std::shared_ptr<boost::asio::ip::tcp::socket> socket, 
@@ -64,8 +76,6 @@ private:
     
     // Thread pool for request processing
     void worker_thread_function();
-    void process_request_async(const Message& request, 
-                              std::function<void(Message)> callback);
     
     boost::asio::ip::tcp::acceptor acceptor_;
     std::shared_ptr<Database> database_;
