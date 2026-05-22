@@ -167,6 +167,8 @@ void RaftNode::heartbeat_thread_func() {
 
 // ── Election timer ────────────────────────────────────────────────────────────
 void RaftNode::election_timer_thread() {
+    // Grace period: wait for peers to start before first election
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500 + random_election_timeout_ms()));
     while (running_) {
         int timeout_ms = random_election_timeout_ms();
         std::unique_lock<std::mutex> lock(timer_mutex_);

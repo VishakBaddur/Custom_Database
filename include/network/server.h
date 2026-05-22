@@ -27,7 +27,7 @@ public:
     void start();
     void stop();
 
-private:
+protected:
     void read_header();
     void read_body(uint32_t message_length);
     void write_response(const Message& response);
@@ -67,7 +67,7 @@ public:
     void process_request_async(const Message& request, 
                               std::function<void(Message)> callback);
 
-private:
+protected:
     void start_accept();
     void handle_accept(std::shared_ptr<boost::asio::ip::tcp::socket> socket, 
                       const boost::system::error_code& error);
