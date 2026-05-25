@@ -70,3 +70,7 @@ target_link_libraries(raft_cluster_test raft_lib -pthread)
 # Raft failure demo
 add_executable(raft_failure_demo src/raft_failure_demo.cpp)
 target_link_libraries(raft_failure_demo raft_lib -pthread)
+
+# Raft-aware database server
+add_executable(distributeddb_raft_server src/raft_server_main.cpp)
+target_link_libraries(distributeddb_raft_server network_lib raft_lib -pthread)
