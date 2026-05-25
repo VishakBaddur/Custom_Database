@@ -47,16 +47,16 @@ void RaftNode::stop() {
     std::cout << "[Raft] Node " << node_id_ << " stopped\n";
 }
 
-bool RaftNode::submit(uint8_t command_type,
+uint64_t RaftNode::submit(uint8_t command_type,
                       const std::string& key,
                       const std::string& value) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (role_ != RaftRole::LEADER) return false;
+    if (role_ != RaftRole::LEADER) return 0;
     LogEntry entry(current_term_, log_.last_index() + 1,
                    command_type, key, value);
     log_.append(entry);
     replicate_to_peers();
-    return true;
+    return entry.index;
 }
 
 RequestVoteReply RaftNode::handle_request_vote(const RequestVoteArgs& args) {

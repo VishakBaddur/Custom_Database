@@ -40,7 +40,7 @@ public:
     void start();
     void stop();
 
-    bool submit(uint8_t command_type,
+    uint64_t submit(uint8_t command_type,
                 const std::string& key,
                 const std::string& value);
 

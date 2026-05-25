@@ -51,7 +51,7 @@ protected:
 class DatabaseServer {
 public:
     DatabaseServer(boost::asio::io_context& io_context, uint16_t port);
-    ~DatabaseServer();
+    virtual ~DatabaseServer();
     
     void start();
     void stop();
@@ -72,7 +72,7 @@ protected:
     void handle_accept(std::shared_ptr<boost::asio::ip::tcp::socket> socket, 
                       const boost::system::error_code& error);
     void on_client_disconnect();
-    Message process_request(const Message& request);
+    virtual Message process_request(const Message& request);
     
     // Thread pool for request processing
     void worker_thread_function();

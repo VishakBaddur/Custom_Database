@@ -10,6 +10,9 @@
 #include <thread>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
 
 namespace distributeddb {
@@ -17,7 +20,11 @@ namespace distributeddb {
 class RaftDatabaseServer : public DatabaseServer {
 public:
     RaftDatabaseServer(boost::asio::io_context& io, uint16_t port)
-        : DatabaseServer(io, port) {}
+        : DatabaseServer(io, port), raft_node_(nullptr) {}
+
+    void set_raft_node(distributeddb::raft::RaftNode* node) {
+        raft_node_ = node;
+    }
 
     void on_raft_commit(const distributeddb::raft::LogEntry& entry) {
         if (!database_) return;
@@ -26,11 +33,68 @@ public:
         if (entry.command_type == 0)      txn->put(entry.key, entry.value);
         else if (entry.command_type == 1) txn->del(entry.key);
         txn->commit();
+        {
+            std::lock_guard<std::mutex> lk(commit_mu_);
+            pending_.erase(entry.index);
+        }
+        commit_cv_.notify_all();
     }
 
-    Message process_request_direct(const Message& request) {
-        return process_request(request);
+    Message process_request(const Message& request) override {
+        Message response;
+        response.id = request.id;
+
+        // GET and SCAN: serve locally, no consensus needed
+        if (request.type == MessageType::GET ||
+            request.type == MessageType::SCAN) {
+            return DatabaseServer::process_request(request);
+        }
+
+        // PUT and DELETE must go through Raft consensus
+        if (!raft_node_) {
+            response.type = MessageType::ERROR;
+            response.value = "Raft not initialized";
+            return response;
+        }
+
+        uint8_t cmd = (request.type == MessageType::PUT) ? 0 : 1;
+
+        // Register pending slot and submit under the same lock so
+        // on_raft_commit cannot signal before we start waiting
+        uint64_t idx;
+        {
+            std::lock_guard<std::mutex> lk(commit_mu_);
+            idx = raft_node_->submit(cmd, request.key, request.value);
+            if (idx == 0) {
+                response.type = MessageType::ERROR;
+                response.value = "NOT_LEADER";
+                return response;
+            }
+            pending_.insert(idx);
+        }
+
+        // Wait for commit (2 second timeout)
+        {
+            std::unique_lock<std::mutex> lk(commit_mu_);
+            bool committed = commit_cv_.wait_for(lk, std::chrono::seconds(2),
+                [this, idx] { return pending_.find(idx) == pending_.end(); });
+            if (!committed) {
+                pending_.erase(idx);
+                response.type = MessageType::ERROR;
+                response.value = "COMMIT_TIMEOUT";
+                return response;
+            }
+        }
+
+        response.type = MessageType::SUCCESS;
+        return response;
     }
+
+private:
+    distributeddb::raft::RaftNode*  raft_node_;
+    std::mutex                      commit_mu_;
+    std::condition_variable         commit_cv_;
+    std::unordered_set<uint64_t>    pending_;
 };
 
 } // namespace distributeddb
@@ -119,6 +183,7 @@ int main(int argc, char* argv[]) {
         // ── Raft node — created ONCE with real callbacks ───────────────────────
         distributeddb::raft::RaftNode raft_node(node_id, raft_port, peers, callbacks);
         g_raft_node = &raft_node;
+        db_server.set_raft_node(&raft_node);
 
         // ── Raft RPC server ───────────────────────────────────────────────────
         distributeddb::raft::RaftServer raft_srv(raft_port, &raft_node);
