@@ -13,7 +13,7 @@ A distributed, fault-tolerant key-value database built from scratch in C++17. Fe
 
 Tested end-to-end over local loopback on an Apple Silicon (M-series) environment.
 
-- ⚡ **Network Throughput:** **23,700+ operations/second** fully end-to-end over TCP
+- ⚡ **Network Throughput:** **28,700+ operations/second** fully end-to-end over TCP
 - 🛡️ **Success Rate:** **100.0%** (50,000 / 50,000 operations completed successfully)
 - 🔄 **Concurrency:** 50 simultaneous client threads
 - 💾 **WAL Efficiency:** ~4.5 MB sequential append-only WAL for 50k dense operations
@@ -203,8 +203,8 @@ cmake --build .
 === Concurrent Benchmark Results ===
 Total operations:      50000
 Successful operations: 50000
-Duration:              2199 ms
-Throughput:            22737.6 ops/sec
+Duration:              1741 ms
+Throughput:            28719.1 ops/sec
 Success rate:          100%
 ```
 
@@ -228,10 +228,10 @@ Success rate:          100%
 - [x] 3-node cluster test with verified replication
 
 ## 📋 Phase 3: Production Hardening *(In Progress)*
-- [ ] Wire Raft into DatabaseServer (client writes through consensus)
+- [x] Wire Raft into DatabaseServer (client writes through consensus)
 - [ ] Persist voted_for and currentTerm to disk (fsync)
 - [ ] B-tree indexing
-- [ ] Docker multi-node cluster setup
+- [x] Docker multi-node cluster setup
 - [ ] Client redirect to leader
 
 ---
