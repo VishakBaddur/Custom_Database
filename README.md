@@ -9,16 +9,16 @@ A distributed, fault-tolerant key-value database built from scratch in C++17. Fe
 
 ---
 
-# Empirical Performance Validation
+# Performance
 
 Tested end-to-end over local loopback on an Apple Silicon (M-series) environment.
 
 - **Network Throughput:** **28,700+ operations/second** fully end-to-end over TCP
 - **Success Rate:** **100.0%** (50,000 / 50,000 operations completed successfully)
-- 🔄 **Concurrency:** 50 simultaneous client threads
+- **Concurrency:** 50 simultaneous client threads
 - **WAL Efficiency:** ~4.5 MB sequential append-only WAL for 50k dense operations
 - **Leader Election:** Sub-300ms re-election after node failure
-- 🔁 **Fault Tolerance:** Cluster survives leader crash and continues serving writes
+- **Fault Tolerance:** Cluster survives leader crash and continues serving writes
 
 ---
 
@@ -163,37 +163,29 @@ cmake --build .
 
 ---
 
-# Technical Challenges & Solutions
+# Implementation Notes
 
-## 1️⃣ Async Buffer Lifetime & Memory Safety
+## Async Buffer Lifetime
 
-**Challenge:** During high-concurrency stress testing, outbound responses corrupted or triggered segfaults. Root cause: stack-allocated buffers passed into `boost::asio::async_write` were destroyed before the OS completed transmission.
-
-**Solution:** Restructured response ownership around connection-scoped member buffers managed by `std::enable_shared_from_this<ConnectionHandler>`, guaranteeing buffer lifetime outlives the async write operation.
+During stress testing, outbound responses were corrupting or segfaulting. Stack-allocated buffers passed into `boost::asio::async_write` were getting destroyed before the OS finished the write. Fixed by restructuring response ownership around `std::enable_shared_from_this<ConnectionHandler>` so buffer lifetime is tied to the connection, not the stack frame.
 
 ---
 
-## 2️⃣ Cross-Thread Socket Race Conditions
+## Cross-Thread Socket Races
 
-**Challenge:** Worker threads writing directly to client sockets introduced thread-safety violations against the Boost.Asio event loop.
-
-**Solution:** All worker thread responses are marshalled back onto the networking strand via `boost::asio::post(...)`. Worker threads never touch socket objects directly.
+Worker threads were writing directly to sockets, which races with the Boost.Asio event loop. Fixed by marshalling all responses back onto the networking strand via `boost::asio::post(...)`. Worker threads never touch sockets directly.
 
 ---
 
-## 3️⃣ Raft Vote Counting & State Machine Correctness
+## Raft Vote Counting
 
-**Challenge:** Vote replies arrive asynchronously on detached threads. Naive counting caused races where a node could declare itself leader multiple times or count stale votes from previous terms.
-
-**Solution:** Vote counting is gated inside `handle_vote_reply()` under `state_mutex_` with term and role checks; only counted if still CANDIDATE and term matches exactly.
+Vote replies arrive asynchronously. Naive counting caused nodes to declare themselves leader multiple times or count stale votes from old terms. Fixed by gating all counting inside `handle_vote_reply()` under `state_mutex_`. Votes only counted if the node is still CANDIDATE and the term matches exactly.
 
 ---
 
-## 4️⃣ Raft Shutdown & Thread Coordination
+## Raft Shutdown Ordering
 
-**Challenge:** Stopping a leader node triggered aborts because the heartbeat thread continued firing after the node's state was destroyed.
-
-**Solution:** `RaftNode::stop()` joins both the election timer thread and the heartbeat thread in order, with `running_ = false` set atomically before either join.
+Stopping a leader was triggering aborts because the heartbeat thread kept firing after node state was destroyed. Fixed by having `RaftNode::stop()` set `running_ = false` atomically then join both the heartbeat and election timer threads before returning.
 
 ---
 
@@ -212,14 +204,14 @@ Success rate:          100%
 
 # Roadmap
 
-## Phase 1: High-Performance Single-Node Database
+## Single-Node Database
 - [x] Async event-driven TCP server (Boost.Asio)
 - [x] 8-thread worker pool with decoupled I/O pipeline
 - [x] Thread-safe key-value engine (std::shared_mutex)
 - [x] ACID transaction support
 - [x] Write-Ahead Logging (WAL) + crash recovery
 
-## Phase 2: Raft Consensus
+## Raft Consensus
 - [x] Leader election with randomized timeouts
 - [x] Log replication with AppendEntries RPC
 - [x] Majority commit with safety guarantees (§5.4)
@@ -227,7 +219,7 @@ Success rate:          100%
 - [x] Fault tolerance: leader failover in <300ms
 - [x] 3-node cluster test with verified replication
 
-## Phase 3: Production Hardening *(In Progress)*
+## Production Hardening *(In Progress)*
 - [x] Wire Raft into DatabaseServer (client writes through consensus)
 - [ ] Persist voted_for and currentTerm to disk (fsync)
 - [ ] B-tree indexing
