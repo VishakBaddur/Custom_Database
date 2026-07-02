@@ -134,7 +134,7 @@ AppendEntriesReply RaftNode::handle_append_entries(const AppendEntriesArgs& args
     return reply;
 }
 
-// ── Vote counting (called by RaftPeer on reply) ───────────────────────────────
+// Vote counting (called by RaftPeer on reply)
 void RaftNode::handle_vote_reply(uint64_t term, bool granted) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     // Ignore stale replies
@@ -152,7 +152,7 @@ void RaftNode::handle_vote_reply(uint64_t term, bool granted) {
     }
 }
 
-// ── Heartbeat loop (leader) ───────────────────────────────────────────────────
+// Heartbeat loop (leader)
 void RaftNode::heartbeat_thread_func() {
     while (running_) {
         std::this_thread::sleep_for(
@@ -165,7 +165,7 @@ void RaftNode::heartbeat_thread_func() {
     }
 }
 
-// ── Election timer ────────────────────────────────────────────────────────────
+// Election timer
 void RaftNode::election_timer_thread() {
     // Grace period: wait for peers to start before first election
     std::this_thread::sleep_for(std::chrono::milliseconds(1500 + random_election_timeout_ms()));
@@ -183,7 +183,7 @@ void RaftNode::election_timer_thread() {
             std::lock_guard<std::mutex> slock(state_mutex_);
             if (role_ != RaftRole::LEADER) {
                 std::cout << "[Raft] Node " << node_id_
-                          << " election timeout — starting election\n";
+                          << " election timeout - starting election\n";
                 become_candidate();
             }
         }
@@ -204,7 +204,7 @@ int RaftNode::random_election_timeout_ms() {
     return dist(rng_);
 }
 
-// ── State transitions ─────────────────────────────────────────────────────────
+// State transitions
 void RaftNode::become_follower(uint64_t term) {
     bool was_leader = (role_ == RaftRole::LEADER);
     role_ = RaftRole::FOLLOWER;

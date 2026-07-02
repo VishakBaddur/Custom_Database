@@ -1,4 +1,4 @@
-# 🚀 DistributedDB - Distributed Key-Value Database with Raft Consensus
+# DistributedDB - Distributed Key-Value Database with Raft Consensus
 
 A distributed, fault-tolerant key-value database built from scratch in C++17. Features a fully implemented Raft consensus algorithm, asynchronous event-driven networking, and crash-safe WAL persistence.
 
@@ -9,20 +9,20 @@ A distributed, fault-tolerant key-value database built from scratch in C++17. Fe
 
 ---
 
-# 🎯 Empirical Performance Validation
+# Empirical Performance Validation
 
 Tested end-to-end over local loopback on an Apple Silicon (M-series) environment.
 
-- ⚡ **Network Throughput:** **28,700+ operations/second** fully end-to-end over TCP
-- 🛡️ **Success Rate:** **100.0%** (50,000 / 50,000 operations completed successfully)
+- **Network Throughput:** **28,700+ operations/second** fully end-to-end over TCP
+- **Success Rate:** **100.0%** (50,000 / 50,000 operations completed successfully)
 - 🔄 **Concurrency:** 50 simultaneous client threads
-- 💾 **WAL Efficiency:** ~4.5 MB sequential append-only WAL for 50k dense operations
-- 🗳️ **Leader Election:** Sub-300ms re-election after node failure
+- **WAL Efficiency:** ~4.5 MB sequential append-only WAL for 50k dense operations
+- **Leader Election:** Sub-300ms re-election after node failure
 - 🔁 **Fault Tolerance:** Cluster survives leader crash and continues serving writes
 
 ---
 
-# 🏗️ Architecture Overview
+# Architecture Overview
 
 ```text
   Client        Client        Client
@@ -53,24 +53,24 @@ Tested end-to-end over local loopback on an Apple Silicon (M-series) environment
 
 ---
 
-# 🗳️ Raft Consensus Implementation
+# Raft Consensus Implementation
 
 Built from scratch following the Raft paper ("In Search of an Understandable Consensus Algorithm", Ongaro & Ousterhout 2014).
 
 ## What's implemented
 
-- **Leader Election** — randomized election timeouts (150–300ms), majority voting, term management
-- **Log Replication** — AppendEntries RPC with prev_log consistency checks
-- **Safety** — §5.4 log completeness: leader only commits entries from current term
-- **Fast Log Backtracking** — conflict_term/conflict_index optimization to skip entire terms on retry
-- **No-op Entry** — leader appends no-op on election to commit previous term entries (§8)
-- **Heartbeats** — 50ms interval to suppress spurious elections
+- **Leader Election:** randomized election timeouts (150-300ms), majority voting, term management
+- **Log Replication:** AppendEntries RPC with prev_log consistency checks
+- **Safety:** §5.4 log completeness: leader only commits entries from current term
+- **Fast Log Backtracking:** conflict_term/conflict_index optimization to skip entire terms on retry
+- **No-op Entry:** leader appends no-op on election to commit previous term entries (§8)
+- **Heartbeats:** 50ms interval to suppress spurious elections
 
 ## Fault Tolerance Demo Output
 
 ```text
-━━━ Phase 1: Starting 3-node cluster ━━━
-  ★  NODE 0 ELECTED AS LEADER  ★
+--- Phase 1: Starting 3-node cluster ---
+  Node 0 elected as leader
 
 ┌────────┬──────────┬────────┬────────────┐
 │ Node   │ Role     │ Term   │ Leader     │
@@ -80,13 +80,13 @@ Built from scratch following the Raft paper ("In Search of an Understandable Con
 │ Node 2 │ FOLLOWER │      1 │ Node 0     │
 └────────┴──────────┴────────┴────────────┘
 
-━━━ Phase 2: Writing data to cluster ━━━
-  ✓  [Node 0] committed PUT key:A=alpha
-  ✓  [Node 0] committed PUT key:B=beta
-  ✓  [Node 0] committed PUT key:C=gamma
+--- Phase 2: Writing data to cluster ---
+  [Node 0] committed PUT key:A=alpha
+  [Node 0] committed PUT key:B=beta
+  [Node 0] committed PUT key:C=gamma
   Committed so far: 9  (3 entries × 3 nodes)
 
-━━━ Phase 3: KILLING LEADER (Node 0) ━━━
+--- Phase 3: Killing leader (Node 0) ---
   Simulating leader crash...
 
 ┌────────┬──────────┬────────┬────────────┐
@@ -95,25 +95,25 @@ Built from scratch following the Raft paper ("In Search of an Understandable Con
 │ Node 2 │ FOLLOWER │      1 │ Node 0     │
 └────────┴──────────┴────────┴────────────┘
 
-━━━ Phase 4: Waiting for new leader election ━━━
-  ★  NODE 2 ELECTED AS LEADER  ★
+--- Phase 4: Waiting for new leader election ---
+  Node 2 elected as leader
   New leader elected in 202ms
 
-━━━ Phase 5: Cluster continues serving writes ━━━
-  ✓  [Node 2] committed PUT key:D=delta
-  ✓  [Node 1] committed PUT key:E=epsilon
+--- Phase 5: Cluster continues serving writes ---
+  [Node 2] committed PUT key:D=delta
+  [Node 1] committed PUT key:E=epsilon
 
-━━━ Summary ━━━
+--- Summary ---
   Total leaders elected : 2
   Total entries committed: 13
   Re-election time       : 202ms
   Cluster survived kill  : YES
-  ✅ FAULT TOLERANCE TEST PASSED
+  FAULT TOLERANCE TEST PASSED
 ```
 
 ---
 
-# 🚀 Quick Start
+# Quick Start
 
 ## Prerequisites
 
@@ -163,7 +163,7 @@ cmake --build .
 
 ---
 
-# 🛠️ Technical Challenges & Solutions
+# Technical Challenges & Solutions
 
 ## 1️⃣ Async Buffer Lifetime & Memory Safety
 
@@ -185,7 +185,7 @@ cmake --build .
 
 **Challenge:** Vote replies arrive asynchronously on detached threads. Naive counting caused races where a node could declare itself leader multiple times or count stale votes from previous terms.
 
-**Solution:** Vote counting is gated inside `handle_vote_reply()` under `state_mutex_` with term and role checks — only counted if still CANDIDATE and term matches exactly.
+**Solution:** Vote counting is gated inside `handle_vote_reply()` under `state_mutex_` with term and role checks; only counted if still CANDIDATE and term matches exactly.
 
 ---
 
@@ -197,7 +197,7 @@ cmake --build .
 
 ---
 
-# 📊 Benchmark Results
+# Benchmark Results
 
 ```text
 === Concurrent Benchmark Results ===
@@ -210,16 +210,16 @@ Success rate:          100%
 
 ---
 
-# 🔮 Roadmap
+# Roadmap
 
-## ✅ Phase 1: High-Performance Single-Node Database
+## Phase 1: High-Performance Single-Node Database
 - [x] Async event-driven TCP server (Boost.Asio)
 - [x] 8-thread worker pool with decoupled I/O pipeline
 - [x] Thread-safe key-value engine (std::shared_mutex)
 - [x] ACID transaction support
 - [x] Write-Ahead Logging (WAL) + crash recovery
 
-## ✅ Phase 2: Raft Consensus
+## Phase 2: Raft Consensus
 - [x] Leader election with randomized timeouts
 - [x] Log replication with AppendEntries RPC
 - [x] Majority commit with safety guarantees (§5.4)
@@ -227,7 +227,7 @@ Success rate:          100%
 - [x] Fault tolerance: leader failover in <300ms
 - [x] 3-node cluster test with verified replication
 
-## 📋 Phase 3: Production Hardening *(In Progress)*
+## Phase 3: Production Hardening *(In Progress)*
 - [x] Wire Raft into DatabaseServer (client writes through consensus)
 - [ ] Persist voted_for and currentTerm to disk (fsync)
 - [ ] B-tree indexing
@@ -236,6 +236,6 @@ Success rate:          100%
 
 ---
 
-# 🔗 Connect
+# Connect
 
 - GitHub: [@VishakBaddur](https://github.com/VishakBaddur)

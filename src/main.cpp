@@ -25,7 +25,7 @@ private:
 };
 
 int main() {
-    std::cout << "🚀 DistributedDB - High-Performance Database System" << std::endl;
+    std::cout << "DistributedDB" << std::endl;
     std::cout << "==================================================" << std::endl;
     
     Database db;
@@ -38,13 +38,13 @@ int main() {
     db.put("config:version", "1.0.0");
     db.put("stats:visits", "12345");
     
-    std::cout << "✅ Inserted test data" << std::endl;
+    std::cout << "Inserted test data" << std::endl;
     
     std::cout << "user:1 = " << db.get("user:1") << std::endl;
     std::cout << "user:2 = " << db.get("user:2") << std::endl;
     std::cout << "config:version = " << db.get("config:version") << std::endl;
     
-    std::cout << "✅ Read operations successful" << std::endl;
+    std::cout << "Read operations successful" << std::endl;
     
     // Performance benchmark
     std::cout << "\n--- Performance Benchmark ---" << std::endl;
@@ -75,7 +75,7 @@ int main() {
     std::cout << "Read performance: " << (10000.0 / read_duration.count()) * 1000 << " ops/sec" << std::endl;
     std::cout << "Total entries: " << db.size() << std::endl;
     
-    std::cout << "\n✅ Database test completed successfully!" << std::endl;
+    std::cout << "\nDatabase test completed successfully" << std::endl;
     
     return 0;
 }

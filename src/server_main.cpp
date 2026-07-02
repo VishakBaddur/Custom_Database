@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
         port = static_cast<uint16_t>(std::stoi(argv[1]));
     }
     
-    std::cout << "🚀 DistributedDB Server - High-Performance Database System" << std::endl;
+    std::cout << "DistributedDB Server" << std::endl;
     std::cout << "=========================================================" << std::endl;
     std::cout << "Starting server on port " << port << std::endl;
     
@@ -59,14 +59,14 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         
-        std::cout << "✅ Database initialized successfully" << std::endl;
+        std::cout << "Database initialized successfully" << std::endl;
         
         // Create and start server
         server = std::make_unique<distributeddb::DatabaseServer>(*io_context, port);
         server->set_database(database);
         server->start();
         
-        std::cout << "✅ Server started successfully" << std::endl;
+        std::cout << "Server started successfully" << std::endl;
         std::cout << "   Port: " << port << std::endl;
         std::cout << "   Max connections: 50,000" << std::endl;
         std::cout << "   Worker threads: 8" << std::endl;
@@ -96,6 +96,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    std::cout << "✅ Server shutdown complete" << std::endl;
+    std::cout << "Server shutdown complete" << std::endl;
     return 0;
 }

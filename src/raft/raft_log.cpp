@@ -26,7 +26,7 @@ bool RaftLog::try_append(uint64_t prev_log_index, uint64_t prev_log_term,
         uint64_t log_index = prev_log_index + 1 + i;
         if (log_index <= entries_.size()) {
             if (entries_[log_index - 1].term != entries[i].term) {
-                // Conflict — truncate everything from here
+                // Conflict - truncate everything from here
                 entries_.resize(log_index - 1);
                 entries_.push_back(entries[i]);
             }

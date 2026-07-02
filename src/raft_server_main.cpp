@@ -99,7 +99,7 @@ private:
 
 } // namespace distributeddb
 
-// ── Globals ───────────────────────────────────────────────────────────────────
+// Globals
 static distributeddb::RaftDatabaseServer*            g_db_server  = nullptr;
 static distributeddb::raft::RaftNode*                g_raft_node  = nullptr;
 static distributeddb::raft::RaftServer*              g_raft_srv   = nullptr;
@@ -145,7 +145,7 @@ int main(int argc, char* argv[]) {
         peers.push_back(p);
     }
 
-    std::cout << "🚀 DistributedDB Raft Node " << node_id << "\n";
+    std::cout << "DistributedDB Raft Node " << node_id << "\n";
     std::cout << "   DB port  : " << db_port   << "\n";
     std::cout << "   Raft port: " << raft_port  << "\n";
     std::cout << "   Peers    : " << peers.size() << "\n\n";
@@ -154,52 +154,52 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     try {
-        // ── Database ──────────────────────────────────────────────────────────
+        // Database
         auto database = distributeddb::DatabaseFactory::create_database();
         database->initialize("./data/node" + std::to_string(node_id));
 
-        // ── IO context ────────────────────────────────────────────────────────
+        // IO context
         boost::asio::io_context io;
         g_io = &io;
         auto work_guard = boost::asio::make_work_guard(io);
 
-        // ── DB server (created before RaftNode so callback can reference it) ──
+        // DB server (created before RaftNode so callback can reference it)
         distributeddb::RaftDatabaseServer db_server(io, db_port);
         db_server.set_database(database);
         g_db_server = &db_server;
 
-        // ── Raft callbacks ────────────────────────────────────────────────────
+        // Raft callbacks
         distributeddb::raft::RaftCallbacks callbacks;
         callbacks.on_commit = [](const distributeddb::raft::LogEntry& entry) {
             if (g_db_server) g_db_server->on_raft_commit(entry);
         };
         callbacks.on_become_leader = [node_id]() {
-            std::cout << "\n★  Node " << node_id << " is now LEADER\n\n";
+            std::cout << "\nNode " << node_id << " is now LEADER\n\n";
         };
         callbacks.on_step_down = [node_id]() {
             std::cout << "↓  Node " << node_id << " stepped down\n";
         };
 
-        // ── Raft node — created ONCE with real callbacks ───────────────────────
+        // Raft node - created once with real callbacks
         distributeddb::raft::RaftNode raft_node(node_id, raft_port, peers, callbacks);
         g_raft_node = &raft_node;
         db_server.set_raft_node(&raft_node);
 
-        // ── Raft RPC server ───────────────────────────────────────────────────
+        // Raft RPC server
         distributeddb::raft::RaftServer raft_srv(raft_port, &raft_node);
         g_raft_srv = &raft_srv;
 
-        // ── Start in correct order ────────────────────────────────────────────
+        // Start in correct order
         raft_srv.start();
         raft_node.start();
         db_server.start();
 
-        std::cout << "✅ Node " << node_id << " running\n";
+        std::cout << "Node " << node_id << " running\n";
         std::cout << "   Client port : " << db_port   << "\n";
         std::cout << "   Raft port   : " << raft_port << "\n";
         std::cout << "Press Ctrl+C to stop\n\n";
 
-        // ── IO threads ────────────────────────────────────────────────────────
+        // IO threads
         size_t n = std::max(2u, std::thread::hardware_concurrency());
         std::vector<std::thread> threads;
         for (size_t i = 0; i < n; ++i)
@@ -211,6 +211,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::cout << "✅ Node " << node_id << " shutdown complete\n";
+    std::cout << "Node " << node_id << " shutdown complete\n";
     return 0;
 }

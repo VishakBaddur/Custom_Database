@@ -107,6 +107,6 @@ int main() {
     srv0->stop();  srv1->stop();  srv2->stop();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    std::cout << "✅ Raft cluster test complete.\n";
+    std::cout << "Raft cluster test complete.\n";
     _exit(0);
 }

@@ -52,7 +52,7 @@ void RaftPeer::send_message(
         if (reply_len > 0)
             boost::asio::read(socket, boost::asio::buffer(body.data(), reply_len));
 
-        // Success — reset failure counter
+        // Success - reset failure counter
         consecutive_failures_.store(0);
         on_reply(body.data(), body.size());
 
@@ -107,7 +107,7 @@ void RaftPeer::send_append_entries(const AppendEntriesArgs& args) {
                                         ? reply.conflict_index : 1;
                     set_next_index(new_next);
                     std::cout << "[Raft] Peer " << peer_id_
-                              << " rejected — nextIndex=" << new_next << "\n";
+                              << " rejected - nextIndex=" << new_next << "\n";
                 }
             } catch (...) {}
         });

@@ -37,10 +37,7 @@ static void print_cluster_state(
 }
 
 int main() {
-    std::cout << "\n";
-    std::cout << "╔═══════════════════════════════════════════════╗\n";
-    std::cout << "║   DistributedDB — Raft Fault Tolerance Demo   ║\n";
-    std::cout << "╚═══════════════════════════════════════════════╝\n\n";
+    std::cout << "\nDistributedDB - Raft Fault Tolerance Demo\n\n";
 
     std::vector<PeerConfig> peers_for[3] = {
         {{1,"127.0.0.1",9001},{2,"127.0.0.1",9002}},
@@ -57,15 +54,14 @@ int main() {
         cb.on_become_leader = [id, &leader_count, &current_leader_id]() {
             leader_count++;
             current_leader_id = id;
-            std::cout << "\n  ★  NODE " << id
-                      << " ELECTED AS LEADER  ★\n\n";
+            std::cout << "\n  Node " << id << " elected as leader\n\n";
         };
         cb.on_step_down = [id]() {
             std::cout << "  ↓  Node " << id << " stepped down\n";
         };
         cb.on_commit = [id, &committed_count](const LogEntry& e) {
             committed_count++;
-            std::cout << "  ✓  [Node " << id << "] committed "
+            std::cout << "  [Node " << id << "] committed "
                       << (e.command_type == 0 ? "PUT" : "DEL")
                       << " " << e.key << "=" << e.value << "\n";
         };
@@ -83,8 +79,8 @@ int main() {
         servers.push_back(std::make_shared<RaftServer>(9000 + i, nodes[i].get()));
     }
 
-    // ── Phase 1: Normal operation ─────────────────────────────────────────────
-    std::cout << "━━━ Phase 1: Starting 3-node cluster ━━━\n\n";
+    // Phase 1: Normal operation
+    std::cout << "--- Phase 1: Starting 3-node cluster ---\n\n";
     for (auto& s : servers) s->start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     for (auto& n : nodes)   n->start();
@@ -102,7 +98,7 @@ int main() {
     print_cluster_state(nodes);
 
     // Submit some writes
-    std::cout << "━━━ Phase 2: Writing data to cluster ━━━\n\n";
+    std::cout << "--- Phase 2: Writing data to cluster ---\n\n";
     uint32_t lid = current_leader_id;
     nodes[lid]->submit(0, "key:A", "alpha");
     nodes[lid]->submit(0, "key:B", "beta");
@@ -111,8 +107,8 @@ int main() {
     std::cout << "\n  Committed so far: " << committed_count << "\n";
 
     int prev_leader_count = leader_count.load();
-    // ── Phase 2: Kill the leader ──────────────────────────────────────────────
-    std::cout << "\n━━━ Phase 3: KILLING LEADER (Node " << lid << ") ━━━\n\n";
+    // Phase 2: Kill the leader
+    std::cout << "\n--- Phase 3: Killing leader (Node " << lid << ") ---\n\n";
     std::cout << "  Simulating leader crash...\n";
     nodes[lid]->stop();
     servers[lid]->stop();
@@ -124,8 +120,8 @@ int main() {
 
     print_cluster_state(nodes);
 
-    // ── Phase 3: Wait for re-election ─────────────────────────────────────────
-    std::cout << "━━━ Phase 4: Waiting for new leader election ━━━\n\n";
+    // Phase 3: Wait for re-election
+    std::cout << "--- Phase 4: Waiting for new leader election ---\n\n";
     auto t_start = std::chrono::steady_clock::now();
 
     for (int i = 0; i < 30; ++i) {
@@ -145,8 +141,8 @@ int main() {
     std::cout << "  New leader elected in " << elapsed_ms << "ms\n";
     print_cluster_state(nodes);
 
-    // ── Phase 4: Cluster keeps serving ───────────────────────────────────────
-    std::cout << "━━━ Phase 5: Cluster continues serving writes ━━━\n\n";
+    // Phase 4: Cluster keeps serving
+    std::cout << "--- Phase 5: Cluster continues serving writes ---\n\n";
     uint32_t new_lid = current_leader_id;
     bool ok1 = nodes[new_lid]->submit(0, "key:D", "delta");
     bool ok2 = nodes[new_lid]->submit(0, "key:E", "epsilon");
@@ -156,16 +152,16 @@ int main() {
 
     print_cluster_state(nodes);
 
-    // ── Summary ───────────────────────────────────────────────────────────────
-    std::cout << "━━━ Summary ━━━\n\n";
+    // Summary
+    std::cout << "--- Summary ---\n\n";
     std::cout << "  Total leaders elected : " << leader_count << "\n";
     std::cout << "  Total entries committed: " << committed_count << "\n";
     std::cout << "  Re-election time       : " << elapsed_ms << "ms\n";
     std::cout << "  Cluster survived kill  : YES\n\n";
 
     bool pass = (leader_count >= 2) && (committed_count >= 5);
-    std::cout << (pass ? "  ✅ FAULT TOLERANCE TEST PASSED\n"
-                       : "  ❌ FAULT TOLERANCE TEST FAILED\n");
+    std::cout << (pass ? "  FAULT TOLERANCE TEST PASSED\n"
+                       : "  FAULT TOLERANCE TEST FAILED\n");
 
     // Cleanup
     std::cout << "\n  Shutting down...\n";
