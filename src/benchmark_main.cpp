@@ -2,6 +2,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <atomic>
 #include <vector>
 
 void run_concurrent_benchmark(const std::string& host, uint16_t port, int num_clients, int operations_per_client) {

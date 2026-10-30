@@ -1,5 +1,6 @@
 #include "core/database.h"
 #include "storage/wal.h"
+#include <atomic>
 #include <iostream>
 #include <shared_mutex>
 #include <unordered_map>
