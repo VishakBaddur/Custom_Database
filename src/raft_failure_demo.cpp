@@ -48,10 +48,13 @@ int main() {
     std::atomic<int>  leader_count{0};
     std::atomic<int>  committed_count{0};
     std::atomic<uint32_t> current_leader_id{99};
+    std::atomic<long long> leader_elected_ns{0};
 
     auto make_callbacks = [&](uint32_t id) {
         RaftCallbacks cb;
-        cb.on_become_leader = [id, &leader_count, &current_leader_id]() {
+        cb.on_become_leader = [id, &leader_count, &current_leader_id, &leader_elected_ns]() {
+            leader_elected_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
             leader_count++;
             current_leader_id = id;
             std::cout << "\n  Node " << id << " elected as leader\n\n";
@@ -110,6 +113,7 @@ int main() {
     // Phase 2: Kill the leader
     std::cout << "\n--- Phase 3: Killing leader (Node " << lid << ") ---\n\n";
     std::cout << "  Simulating leader crash...\n";
+    auto t_kill = std::chrono::steady_clock::now();
     nodes[lid]->stop();
     servers[lid]->stop();
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
@@ -122,16 +126,12 @@ int main() {
 
     // Phase 3: Wait for re-election
     std::cout << "--- Phase 4: Waiting for new leader election ---\n\n";
-    auto t_start = std::chrono::steady_clock::now();
-
-    for (int i = 0; i < 30; ++i) {
+    for (int i = 0; i < 30 && leader_count <= prev_leader_count; ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        if (leader_count > prev_leader_count) break;
-    }
 
-    auto t_end = std::chrono::steady_clock::now();
-    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        t_end - t_start).count();
+    long long kill_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        t_kill.time_since_epoch()).count();
+    long long elapsed_ms = (leader_elected_ns.load() - kill_ns) / 1000000;
 
     if (leader_count <= prev_leader_count) {
         std::cout << "[FAIL] No new leader elected after killing leader\n";
