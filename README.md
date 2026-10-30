@@ -221,7 +221,7 @@ Success rate:          100%
 
 ## Production Hardening *(In Progress)*
 - [x] Wire Raft into DatabaseServer (client writes through consensus)
-- [ ] Persist voted_for and currentTerm to disk (fsync)
+- [x] Persist voted_for, currentTerm and the Raft log to disk (fsync)
 - [ ] B-tree indexing
 - [x] Docker multi-node cluster setup
 - [ ] Client redirect to leader
