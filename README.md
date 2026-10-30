@@ -97,7 +97,7 @@ Built from scratch following the Raft paper ("In Search of an Understandable Con
 
 --- Phase 4: Waiting for new leader election ---
   Node 2 elected as leader
-  New leader elected in 202ms
+  New leader elected in 293ms
 
 --- Phase 5: Cluster continues serving writes ---
   [Node 2] committed PUT key:D=delta
@@ -106,7 +106,7 @@ Built from scratch following the Raft paper ("In Search of an Understandable Con
 --- Summary ---
   Total leaders elected : 2
   Total entries committed: 13
-  Re-election time       : 202ms
+  Re-election time       : 293ms
   Cluster survived kill  : YES
   FAULT TOLERANCE TEST PASSED
 ```
