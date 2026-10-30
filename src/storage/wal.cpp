@@ -3,6 +3,11 @@
 #include <filesystem>
 #include <chrono>
 #include <cstring>
+#include <algorithm>
+#include <unordered_set>
+#include <cerrno>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace distributeddb {
 
@@ -105,30 +110,93 @@ WriteAheadLog::~WriteAheadLog() {
     if (log_file_.is_open()) {
         log_file_.close();
     }
+    drain_pending_locked();
+    if (sync_fd_ >= 0) {
+        ::fsync(sync_fd_);
+        ::close(sync_fd_);
+        sync_fd_ = -1;
+    }
 }
 
-bool WriteAheadLog::append_record(const WALRecord& record) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
-    try {
-        // Set timestamp if not set
-        WALRecord record_with_timestamp = record;
-        if (record_with_timestamp.timestamp == 0) {
-            record_with_timestamp.timestamp = get_current_timestamp();
-        }
-        
-        // Write record to file
-        if (!write_record_to_file(record_with_timestamp)) {
+static bool write_all(int fd, const std::string& buf) {
+    size_t off = 0;
+    while (off < buf.size()) {
+        ssize_t n = ::write(fd, buf.data() + off, buf.size() - off);
+        if (n < 0) {
+            if (errno == EINTR) continue;
             return false;
         }
-        
-        // Update statistics
+        off += static_cast<size_t>(n);
+    }
+    return true;
+}
+
+bool WriteAheadLog::drain_pending_locked() {
+    if (pending_buf_.empty()) return true;
+    std::lock_guard<std::mutex> io(io_mutex_);
+    bool ok = sync_fd_ >= 0 && write_all(sync_fd_, pending_buf_);
+    pending_buf_.clear();
+    return ok;
+}
+
+bool WriteAheadLog::append_record(const WALRecord& record, bool wait_for_sync) {
+    auto a0 = std::chrono::steady_clock::now();
+    std::unique_lock<std::mutex> lock(mutex_);
+    lock_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - a0).count();
+
+    try {
+        WALRecord r = record;
+        if (r.timestamp == 0) {
+            r.timestamp = get_current_timestamp();
+        }
+
+        // Buffer the framed record in memory; the sync leader writes it out
+        std::vector<uint8_t> data = r.serialize();
+        uint32_t size = static_cast<uint32_t>(data.size());
+        pending_buf_.append(reinterpret_cast<const char*>(&size), sizeof(size));
+        pending_buf_.append(reinterpret_cast<const char*>(data.data()), data.size());
+
         total_records_++;
-        total_bytes_ += record_with_timestamp.size();
-        
-        // Flush to disk for durability
-        log_file_.flush();
-        
+        total_bytes_ += r.size();
+        uint64_t my_seq = ++write_seq_;
+        auto w0 = std::chrono::steady_clock::now();
+
+        while (wait_for_sync && synced_seq_ < my_seq) {
+            if (!sync_in_progress_) {
+                sync_in_progress_ = true;
+                uint64_t target = write_seq_;
+                // io_mutex_ is taken before mutex_ is released so batches keep their order
+                std::unique_lock<std::mutex> io(io_mutex_);
+                std::string batch;
+                batch.swap(pending_buf_);
+                int fd = sync_fd_;
+                lock.unlock();
+
+                auto t0 = std::chrono::steady_clock::now();
+                bool ok = (fd >= 0) && write_all(fd, batch) && (::fsync(fd) == 0);
+                auto t1 = std::chrono::steady_clock::now();
+                io.unlock();
+
+                lock.lock();
+                sync_count_++;
+                sync_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+                sync_in_progress_ = false;
+                if (ok && target > synced_seq_) {
+                    synced_seq_ = target;
+                }
+                sync_cv_.notify_all();
+                if (!ok) {
+                    return false;
+                }
+            } else {
+                sync_cv_.wait(lock);
+            }
+        }
+
+        if (wait_for_sync) {
+            wait_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - w0).count();
+            wait_count_++;
+        }
         return true;
     } catch (const std::exception& e) {
         std::cerr << "WAL append error: " << e.what() << std::endl;
@@ -139,58 +207,66 @@ bool WriteAheadLog::append_record(const WALRecord& record) {
 std::vector<WALRecord> WriteAheadLog::read_all_records() {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<WALRecord> records;
-    
+    drain_pending_locked();
+
     try {
-        // Close current file and reopen for reading
-        log_file_.close();
-        std::ifstream read_file(current_log_file_, std::ios::binary);
-        
-        if (!read_file.is_open()) {
-            std::cerr << "Failed to open WAL file for reading: " << current_log_file_ << std::endl;
-            return records;
-        }
-        
-        // Read records
-        while (read_file.good()) {
-            // Read record size (4 bytes)
-            uint32_t record_size;
-            read_file.read(reinterpret_cast<char*>(&record_size), sizeof(record_size));
-            
-            if (read_file.eof()) break;
-            
-            if (record_size > 1024 * 1024) { // 1MB limit
-                std::cerr << "WAL record too large: " << record_size << " bytes" << std::endl;
-                break;
-            }
-            
-            // Read record data
-            std::vector<uint8_t> data(record_size);
-            read_file.read(reinterpret_cast<char*>(data.data()), record_size);
-            
-            if (read_file.gcount() != static_cast<std::streamsize>(record_size)) {
-                std::cerr << "Failed to read complete WAL record" << std::endl;
-                break;
-            }
-            
-            // Deserialize record
-            try {
-                WALRecord record = WALRecord::deserialize(data);
-                records.push_back(record);
-            } catch (const std::exception& e) {
-                std::cerr << "Failed to deserialize WAL record: " << e.what() << std::endl;
-                break;
+        // Every WAL file in this directory, oldest first
+        std::vector<std::string> files;
+        for (const auto& entry : std::filesystem::directory_iterator(log_dir_)) {
+            std::string name = entry.path().filename().string();
+            if (name.rfind("wal_", 0) == 0 && entry.path().extension() == ".log") {
+                files.push_back(entry.path().string());
             }
         }
-        
-        read_file.close();
-        
-        // Reopen for writing
-        log_file_.open(current_log_file_, std::ios::binary | std::ios::app);
-        
+        std::sort(files.begin(), files.end());
+
+        for (const auto& path : files) {
+            std::ifstream in(path, std::ios::binary);
+            if (!in.is_open()) {
+                std::cerr << "Failed to open WAL file for reading: " << path << std::endl;
+                continue;
+            }
+
+            std::vector<WALRecord> file_records;
+            while (in.good()) {
+                uint32_t record_size;
+                in.read(reinterpret_cast<char*>(&record_size), sizeof(record_size));
+                if (in.gcount() != static_cast<std::streamsize>(sizeof(record_size))) break;
+                if (record_size > 1024 * 1024) {
+                    std::cerr << "WAL record too large: " << record_size << " bytes" << std::endl;
+                    break;
+                }
+
+                std::vector<uint8_t> data(record_size);
+                in.read(reinterpret_cast<char*>(data.data()), record_size);
+                if (in.gcount() != static_cast<std::streamsize>(record_size)) {
+                    break;  // torn record at the tail
+                }
+
+                try {
+                    file_records.push_back(WALRecord::deserialize(data));
+                } catch (const std::exception& e) {
+                    std::cerr << "Failed to deserialize WAL record: " << e.what() << std::endl;
+                    break;
+                }
+            }
+
+            // Transaction ids restart at 1 on every run, so match COMMITs within one file only
+            std::unordered_set<uint64_t> committed;
+            for (const auto& r : file_records) {
+                if (r.type == WALRecordType::COMMIT) committed.insert(r.transaction_id);
+            }
+            for (auto& r : file_records) {
+                bool is_write = (r.type == WALRecordType::PUT || r.type == WALRecordType::DELETE);
+                if (!is_write || committed.count(r.transaction_id)) {
+                    records.push_back(std::move(r));
+                }
+            }
+        }
     } catch (const std::exception& e) {
         std::cerr << "WAL read error: " << e.what() << std::endl;
     }
-    
+
     return records;
 }
 
@@ -198,6 +274,7 @@ bool WriteAheadLog::create_checkpoint(const std::string& checkpoint_file) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     try {
+        drain_pending_locked();
         // Create checkpoint record
         WALRecord checkpoint_record;
         checkpoint_record.type = WALRecordType::CHECKPOINT;
@@ -278,6 +355,7 @@ bool WriteAheadLog::truncate_log() {
     std::lock_guard<std::mutex> lock(mutex_);
     
     try {
+        drain_pending_locked();
         // Close current file
         log_file_.close();
         
@@ -301,8 +379,9 @@ bool WriteAheadLog::truncate_log() {
 
 void WriteAheadLog::flush() {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (log_file_.is_open()) {
-        log_file_.flush();
+    drain_pending_locked();
+    if (sync_fd_ >= 0) {
+        ::fsync(sync_fd_);
     }
 }
 
@@ -317,6 +396,11 @@ bool WriteAheadLog::open_new_log_file() {
         
         // Open file for writing
         log_file_.open(current_log_file_, std::ios::binary | std::ios::app);
+
+        if (sync_fd_ >= 0) {
+            ::close(sync_fd_);
+        }
+        sync_fd_ = ::open(current_log_file_.c_str(), O_WRONLY | O_APPEND);
         
         if (!log_file_.is_open()) {
             std::cerr << "Failed to open WAL file: " << current_log_file_ << std::endl;
@@ -329,6 +413,11 @@ bool WriteAheadLog::open_new_log_file() {
         std::cerr << "WAL file open error: " << e.what() << std::endl;
         return false;
     }
+}
+
+bool WriteAheadLog::sync_to_disk() {
+    if (sync_fd_ < 0) return false;
+    return ::fsync(sync_fd_) == 0;
 }
 
 uint64_t WriteAheadLog::get_current_timestamp() const {

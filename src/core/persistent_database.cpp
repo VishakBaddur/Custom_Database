@@ -37,7 +37,7 @@ public:
         record.value_length = static_cast<uint32_t>(value.length());
         record.transaction_id = id_;
         
-        if (!wal_->append_record(record)) {
+        if (!wal_->append_record(record, false)) {
             // Rollback on WAL failure
             data_.erase(key);
             has_writes_ = false;
@@ -69,7 +69,7 @@ public:
         record.key_length = static_cast<uint32_t>(key.length());
         record.transaction_id = id_;
         
-        if (!wal_->append_record(record)) {
+        if (!wal_->append_record(record, false)) {
             // Rollback on WAL failure
             data_[key] = old_value;
             has_writes_ = false;

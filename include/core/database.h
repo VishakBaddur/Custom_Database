@@ -1,6 +1,9 @@
 #pragma once
 
 #include <string>
+#include <vector>
+#include <cstdint>
+#include <utility>
 #include <memory>
 #include <unordered_map>
 #include <shared_mutex>

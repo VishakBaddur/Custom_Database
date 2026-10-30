@@ -6,6 +6,7 @@
 #include <fstream>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 #include <cstdint>
 
 namespace distributeddb {
@@ -48,7 +49,7 @@ public:
     ~WriteAheadLog();
     
     // Append a record to the log
-    bool append_record(const WALRecord& record);
+    bool append_record(const WALRecord& record, bool wait_for_sync = true);
     
     // Read all records from the log
     std::vector<WALRecord> read_all_records();
@@ -72,6 +73,18 @@ private:
     std::string log_dir_;
     std::string current_log_file_;
     std::ofstream log_file_;
+    int sync_fd_ = -1;
+    std::condition_variable sync_cv_;
+    uint64_t write_seq_ = 0;
+    uint64_t synced_seq_ = 0;
+    bool sync_in_progress_ = false;
+    std::string pending_buf_;
+    std::mutex io_mutex_;
+    uint64_t sync_count_ = 0;
+    uint64_t sync_ns_ = 0;
+    uint64_t wait_ns_ = 0;
+    uint64_t wait_count_ = 0;
+    uint64_t lock_ns_ = 0;
     mutable std::mutex mutex_;
     uint64_t total_records_;
     uint64_t total_bytes_;
@@ -84,6 +97,12 @@ private:
     
     // Write record to file
     bool write_record_to_file(const WALRecord& record);
+
+    // Force written data to disk
+    bool sync_to_disk();
+
+    // Write buffered records to the file (mutex_ must be held)
+    bool drain_pending_locked();
 };
 
 } // namespace distributeddb
