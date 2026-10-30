@@ -1,6 +1,6 @@
 # DistributedDB - Distributed Key-Value Database with Raft Consensus
 
-A distributed, fault-tolerant key-value database built from scratch in C++17. Features a fully implemented Raft consensus algorithm, asynchronous event-driven networking, and crash-safe WAL persistence.
+A distributed, fault-tolerant key-value database built from scratch in C++17. Features a fully implemented Raft consensus algorithm, asynchronous event-driven networking, and a write-ahead log with fsync per commit and crash recovery.
 
 [![C++](https://img.shields.io/badge/C++-17-blue.svg)](https://isocpp.org/)
 [![CMake](https://img.shields.io/badge/CMake-3.15+-green.svg)](https://cmake.org/)
