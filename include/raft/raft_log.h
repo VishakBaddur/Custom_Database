@@ -3,6 +3,7 @@
 #include <vector>
 #include <mutex>
 #include <cstdint>
+#include <string>
 
 namespace distributeddb {
 namespace raft {
@@ -10,6 +11,10 @@ namespace raft {
 class RaftLog {
 public:
     RaftLog();
+    ~RaftLog();
+
+    // Enable on-disk persistence: replays the file, then appends to it
+    bool open(const std::string& path);
 
     // Append a single entry (leader only)
     void append(const LogEntry& entry);
@@ -54,6 +59,11 @@ private:
     std::vector<LogEntry> entries_; // 0-based internally, but 1-based externally
     uint64_t commit_index_;
     uint64_t last_applied_;
+    int fd_ = -1;
+
+    void persist_append(const LogEntry& e);
+    void persist_truncate(uint64_t keep);
+    void sync_log();
 };
 
 } // namespace raft

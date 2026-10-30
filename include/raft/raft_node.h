@@ -34,7 +34,8 @@ public:
     RaftNode(uint32_t node_id,
              uint16_t raft_port,
              const std::vector<PeerConfig>& peers,
-             RaftCallbacks callbacks);
+             RaftCallbacks callbacks,
+             const std::string& data_dir = "");
     ~RaftNode();
 
     void start();
@@ -88,6 +89,7 @@ private:
     size_t                  vote_count_;
 
     RaftLog                 log_;
+    int                     state_fd_ = -1;
 
     std::atomic<bool>       running_;
     std::thread             timer_thread_;

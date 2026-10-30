@@ -3,6 +3,10 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <cstring>
+#include <filesystem>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace distributeddb {
 namespace raft {
@@ -10,7 +14,8 @@ namespace raft {
 RaftNode::RaftNode(uint32_t node_id,
                    uint16_t raft_port,
                    const std::vector<PeerConfig>& peers,
-                   RaftCallbacks callbacks)
+                   RaftCallbacks callbacks,
+                   const std::string& data_dir)
     : node_id_(node_id)
     , raft_port_(raft_port)
     , peer_configs_(peers)
@@ -22,9 +27,24 @@ RaftNode::RaftNode(uint32_t node_id,
     , running_(false)
     , timer_reset_(false)
     , rng_(std::random_device{}())
-{}
+{
+    if (data_dir.empty()) return;
+    std::filesystem::create_directories(data_dir);
+    state_fd_ = ::open((data_dir + "/raft_state").c_str(), O_RDWR | O_CREAT, 0644);
+    if (state_fd_ >= 0) {
+        uint64_t buf[2];
+        if (::pread(state_fd_, buf, sizeof(buf), 0) == static_cast<ssize_t>(sizeof(buf))) {
+            current_term_ = buf[0];
+            voted_for_ = static_cast<int64_t>(buf[1]);
+        }
+    }
+    log_.open(data_dir + "/raft_log");
+}
 
-RaftNode::~RaftNode() { stop(); }
+RaftNode::~RaftNode() {
+    stop();
+    if (state_fd_ >= 0) ::close(state_fd_);
+}
 
 void RaftNode::start() {
     running_ = true;
@@ -313,8 +333,22 @@ void RaftNode::apply_committed_entries() {
     }
 }
 
-void RaftNode::set_current_term(uint64_t term) { current_term_ = term; }
-void RaftNode::set_voted_for(int64_t candidate_id) { voted_for_ = candidate_id; }
+static void write_state(int fd, uint64_t term, int64_t voted) {
+    if (fd < 0) return;
+    uint64_t buf[2] = { term, static_cast<uint64_t>(voted) };
+    ::pwrite(fd, buf, sizeof(buf), 0);
+    ::fsync(fd);
+}
+
+void RaftNode::set_current_term(uint64_t term) {
+    current_term_ = term;
+    write_state(state_fd_, current_term_, voted_for_);
+}
+
+void RaftNode::set_voted_for(int64_t candidate_id) {
+    voted_for_ = candidate_id;
+    write_state(state_fd_, current_term_, voted_for_);
+}
 
 RaftRole RaftNode::role() const {
     std::lock_guard<std::mutex> lock(state_mutex_);

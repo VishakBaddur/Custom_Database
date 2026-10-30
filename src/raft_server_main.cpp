@@ -181,7 +181,8 @@ int main(int argc, char* argv[]) {
         };
 
         // Raft node - created once with real callbacks
-        distributeddb::raft::RaftNode raft_node(node_id, raft_port, peers, callbacks);
+        distributeddb::raft::RaftNode raft_node(node_id, raft_port, peers, callbacks,
+                                                    "./data/node" + std::to_string(node_id) + "/raft");
         g_raft_node = &raft_node;
         db_server.set_raft_node(&raft_node);
 
