@@ -11,14 +11,13 @@ A distributed, fault-tolerant key-value database built from scratch in C++17. Fe
 
 # Performance
 
-Tested end-to-end over local loopback on an Apple Silicon (M-series) environment.
+Tested over local loopback on an Apple Silicon Mac. Each benchmark iteration is one PUT plus one GET, with fsync on every commit.
 
-- **Network Throughput:** **28,700+ operations/second** fully end-to-end over TCP
-- **Success Rate:** **100.0%** (50,000 / 50,000 operations completed successfully)
-- **Concurrency:** 50 simultaneous client threads
-- **WAL Efficiency:** ~4.5 MB sequential append-only WAL for 50k dense operations
-- **Leader Election:** Sub-300ms re-election after node failure
-- **Fault Tolerance:** Cluster survives leader crash and continues serving writes
+- **3-node Raft cluster:** 5,100+ iterations/sec, 50 concurrent clients, 100% success over 50,000 operations. Every PUT waits for majority commit.
+- **Single node (no replication):** 39,000+ iterations/sec, 50 concurrent clients, 100% success over 50,000 operations.
+- **WAL:** group-commit fsync, crash recovery verified with kill -9
+- **Leader election:** sub-300ms re-election after node failure
+- **Fault tolerance:** cluster survives leader crash and continues serving writes
 
 ---
 
@@ -192,11 +191,18 @@ Stopping a leader was triggering aborts because the heartbeat thread kept firing
 # Benchmark Results
 
 ```text
-=== Concurrent Benchmark Results ===
+3-node Raft cluster (3 processes, one machine)
 Total operations:      50000
 Successful operations: 50000
-Duration:              1741 ms
-Throughput:            28719.1 ops/sec
+Duration:              9719 ms
+Throughput:            5144.56 ops/sec
+Success rate:          100%
+
+Single node (no replication)
+Total operations:      50000
+Successful operations: 50000
+Duration:              1270 ms
+Throughput:            39370.1 ops/sec
 Success rate:          100%
 ```
 
