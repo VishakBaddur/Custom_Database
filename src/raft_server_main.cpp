@@ -35,7 +35,7 @@ public:
         txn->commit();
         {
             std::lock_guard<std::mutex> lk(commit_mu_);
-            pending_.erase(entry.index);
+            if (entry.index > committed_index_) committed_index_ = entry.index;
         }
         commit_cv_.notify_all();
     }
@@ -59,27 +59,19 @@ public:
 
         uint8_t cmd = (request.type == MessageType::PUT) ? 0 : 1;
 
-        // Register pending slot and submit under the same lock so
-        // on_raft_commit cannot signal before we start waiting
-        uint64_t idx;
-        {
-            std::lock_guard<std::mutex> lk(commit_mu_);
-            idx = raft_node_->submit(cmd, request.key, request.value);
-            if (idx == 0) {
-                response.type = MessageType::ERROR;
-                response.value = "NOT_LEADER";
-                return response;
-            }
-            pending_.insert(idx);
+        // Never call into Raft while holding commit_mu_ (lock-order deadlock)
+        uint64_t idx = raft_node_->submit(cmd, request.key, request.value);
+        if (idx == 0) {
+            response.type = MessageType::ERROR;
+            response.value = "NOT_LEADER";
+            return response;
         }
 
-        // Wait for commit (2 second timeout)
         {
             std::unique_lock<std::mutex> lk(commit_mu_);
             bool committed = commit_cv_.wait_for(lk, std::chrono::seconds(2),
-                [this, idx] { return pending_.find(idx) == pending_.end(); });
+                [this, idx] { return committed_index_ >= idx; });
             if (!committed) {
-                pending_.erase(idx);
                 response.type = MessageType::ERROR;
                 response.value = "COMMIT_TIMEOUT";
                 return response;
@@ -94,7 +86,7 @@ private:
     distributeddb::raft::RaftNode*  raft_node_;
     std::mutex                      commit_mu_;
     std::condition_variable         commit_cv_;
-    std::unordered_set<uint64_t>    pending_;
+    uint64_t                        committed_index_{0};
 };
 
 } // namespace distributeddb

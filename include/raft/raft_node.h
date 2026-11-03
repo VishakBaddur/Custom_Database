@@ -51,6 +51,8 @@ public:
 
     // Called by RaftPeer when a vote reply arrives
     void handle_vote_reply(uint64_t term, bool granted);
+    // Called by RaftPeer when a follower acknowledges entries
+    void on_append_success();
 
     // Status
     RaftRole role()         const;

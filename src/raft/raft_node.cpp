@@ -303,6 +303,11 @@ void RaftNode::replicate_to_peers() {
     }
 }
 
+void RaftNode::on_append_success() {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (role_ == RaftRole::LEADER) advance_commit_index();
+}
+
 void RaftNode::advance_commit_index() {
     uint64_t last = log_.last_index();
     for (uint64_t n = last; n > log_.commit_index(); --n) {

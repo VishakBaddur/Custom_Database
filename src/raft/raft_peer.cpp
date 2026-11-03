@@ -100,8 +100,11 @@ void RaftPeer::send_append_entries(const AppendEntriesArgs& args) {
                 auto reply = AppendEntriesReply::deserialize(data, len);
                 if (reply.success) {
                     uint64_t new_match = prev_idx + n_entries;
-                    set_match_index(new_match);
-                    set_next_index(new_match + 1);
+                    if (new_match >= match_index()) {
+                        set_match_index(new_match);
+                        set_next_index(new_match + 1);
+                    }
+                    node_->on_append_success();
                 } else {
                     uint64_t new_next = (reply.conflict_index > 0)
                                         ? reply.conflict_index : 1;
